@@ -1,0 +1,6 @@
+pandas>=2.0
+requests>=2.31
+holidays>=0.40
+tqdm>=4.66
+kaggle>=1.6
+ipykernel>=6.29
