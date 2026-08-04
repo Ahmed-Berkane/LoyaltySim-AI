@@ -1,27 +1,27 @@
 {
-  "python.defaultInterpreterPath": "${workspaceFolder}/venv/Scripts/python.exe",
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
   "python.terminal.activateEnvironment": true,
   "python.terminal.activateEnvInCurrentTerminal": true,
 
   "terminal.integrated.env.windows": {
-    "VIRTUAL_ENV": "${workspaceFolder}\\venv",
-    "Path": "${workspaceFolder}\\venv\\Scripts;${env:Path}"
+    "VIRTUAL_ENV": "${workspaceFolder}\\.venv",
+    "Path": "${workspaceFolder}\\.venv\\Scripts;${env:Path}"
   },
 
   "terminal.integrated.profiles.windows": {
-    "LoyaltySim venv": {
+    "CLV venv": {
       "path": "powershell.exe",
       "args": [
         "-NoExit",
         "-ExecutionPolicy",
         "Bypass",
         "-Command",
-        "& '${workspaceFolder}\\venv\\Scripts\\Activate.ps1'"
+        "& '${workspaceFolder}\\.venv\\Scripts\\Activate.ps1'"
       ],
       "icon": "server-environment"
     }
   },
-  "terminal.integrated.defaultProfile.windows": "LoyaltySim venv",
+  "terminal.integrated.defaultProfile.windows": "CLV venv",
 
   "task.allowAutomaticTasks": "on",
   "jupyter.kernels.excludePythonEnvironments": []

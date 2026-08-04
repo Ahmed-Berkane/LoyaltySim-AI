@@ -2,9 +2,9 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "LoyaltySim: activate venv on open",
+      "label": "CLV: activate venv on open",
       "type": "shell",
-      "command": "Write-Host 'LoyaltySim venv active — python:' (Get-Command python).Source",
+      "command": "Write-Host 'CLV venv active — python:' (Get-Command python).Source",
       "options": {
         "cwd": "${workspaceFolder}",
         "shell": {
@@ -14,7 +14,7 @@
             "-ExecutionPolicy",
             "Bypass",
             "-Command",
-            "& '${workspaceFolder}\\venv\\Scripts\\Activate.ps1'; Write-Host 'LoyaltySim venv active — python:' (Get-Command python).Source"
+            "& '${workspaceFolder}\\.venv\\Scripts\\Activate.ps1'; Write-Host 'CLV venv active — python:' (Get-Command python).Source"
           ]
         }
       },

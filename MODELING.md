@@ -1,106 +1,94 @@
-# Modeling Data Guide
+# Modeling (CLV)
 
-Answers to common readiness questions and how to use each `data/modeling/*.parquet` file.
+**Sequence:** customer-base audit → weekly noncontractual CLV. Do not train CLV before the audit.
 
-## Quick answers
+**Spine:** UCI Online Retail II (EU), `python scripts/uci_pipeline.py`.
 
-| Question | Answer |
-|----------|--------|
-| **Can we integrate Instacart?** | Yes — pipeline now exports `instacart_orders` (~3M orders) and `instacart_baskets` (~32M line items with `reordered` flag). Requires Kaggle raw files in `data/raw/instacart/`. |
-| **Is RFM/segmentation blocked?** | No data gap — 793 Superstore customers is small but valid. Use `customer_features.parquet` (`R_score`, `F_score`, `M_score`, `rfm_segment`). |
-| **More CLV / seasonality history?** | Yes — **UCI Online Retail I** added as a separate universe: ~400k transactions, ~4.3k customers, Dec 2010–Dec 2011 (UK). Use `online_retail_transactions.parquet`. |
-| **Uplift modeling?** | Yes (synthetic RCT) — `uplift_campaigns.parquet` has 2 waves × customers with `treatment`, `offer_discount_pct`, `responded`, `incremental_revenue`. Seeded from `discount_sensitivity`. |
-| **Next best action?** | Partial → **prototype-ready** — `nba_offer_catalog.parquet` + `nba_offer_events.parquet` (shown / clicked / converted). Simulated from category affinity + RFM. |
-| **Feature store?** | Yes — `customer_features.parquet` is the single customer feature table (16 engineered features + labels). Built by `scripts/feature_store.py`, called from `build_datasets.py`. |
+**Consulting map:** Customer Value Assessment (notebooks-first).
 
----
+| Phase | Where |
+|-------|--------|
+| 1–2 Business / data | Pipeline + EDA |
+| 3 Customer master | `00` → `audit/uci_customer_master.parquet` |
+| 4 Dual descriptive lenses | `00` Part A (Acquisition…Heterogeneity) + Part B (Hardie/Ross) |
+| 5 Cohorts | `00` Lenses 3–5 |
+| 6 Access data + explore | `01` §§ 1–2 |
+| 7 Protocol + RFM | `01` §§ 3–4 |
+| 8 Val BG/NBD + GG → £ scale | `01` §§ 5–6 |
+| 9 Test BG/NBD + GG | `01` §§ 7–8 |
+| 10 CLV + £ gate + ranking | `01` §9 |
+| 11 Segments × scenarios | `01` §§ 10–11 |
+| 12 Artifacts | `01` §12 |
+| 13 Enterprise foil (optional) | `02` — HGB / Hardie+HGB blend vs Hardie |
 
-## Modeling universes (still not cross-joined)
-
-```
-Superstore spine     → fact_transactions, dim_customers, customer_features, uplift, nba
-Online Retail (UK)   → online_retail_transactions, online_retail_customers  [CLV scale-up]
-Telco                → telco_customers  [labeled churn]
-Instacart            → instacart_orders, instacart_baskets, instacart_users
-```
-
-Customer IDs are **not** shared across universes by design.
+`01` is **stepwise** (granular `clv_weekly` API in-notebook). Smoke tests may still call `run_three_way` for the same protocol.
 
 ---
 
-## File reference
+## 0 · Customer-base audit
 
-### Superstore loyalty spine
+| | |
+|---|---|
+| **Data** | Order spine from `uci_fact_transactions` |
+| **Goal** | Descriptive health on the **customer × time** face |
+| **Notebook** | `Notebooks/00-customer-base-audit.ipynb` |
+| **Module** | `scripts/customer_base_audit.py` |
 
-| File | Grain | Use |
-|------|-------|-----|
-| `fact_transactions.parquet` | Line item | CLV, seasonality, profit |
-| `dim_customers.parquet` | Customer | Aggregates |
-| `customer_features.parquet` | Customer | **Feature store** — RFM, behavioral, temporal, loyalty features + `inactivity_churn_label` |
-| `uplift_campaigns.parquet` | Customer × campaign wave | Uplift / CATE models (`treatment`, `responded`, `incremental_revenue`) |
-| `nba_offer_catalog.parquet` | Offer | Static offer definitions |
-| `nba_offer_events.parquet` | Customer × offer | Ranking / conversion models (`shown`, `clicked`, `converted`) |
+**Part A (consulting views):** Acquisition, Frequency, Monetary, Duration, Heterogeneity.
 
-### CLV scale-up (Online Retail I)
+**Part B (Fader / Hardie / Ross):** single-period heterogeneity, period vs period, cohort evolution, cohort comparison, overall base health.
 
-| File | Grain | Use |
-|------|-------|-----|
-| `online_retail_transactions.parquet` | Line item | BG/NBD, Gamma-Gamma CLV, seasonality |
-| `online_retail_customers.parquet` | Customer | RFM at 4k+ customer scale |
-
-### Instacart (optional)
-
-| File | Grain | Use |
-|------|-------|-----|
-| `instacart_orders.parquet` | Order | Sequence / cadence |
-| `instacart_baskets.parquet` | Order line | Reorder prediction, market basket |
-| `instacart_users.parquet` | User | User-level aggregates |
-
-### Telco benchmark
-
-| File | Grain | Use |
-|------|-------|-----|
-| `telco_customers.parquet` | Account | Supervised churn (`churn_flag`) |
+Revenue-only. Exports under `data/modeling/audit/` (orders, master, lifetime, acquisition, panels, whale).
 
 ---
 
-## Labels & synthetic data honesty
+## 1 · CLV (noncontractual, weekly)
 
-| Field | Type |
-|-------|------|
-| `telco.churn_flag` | **Real** labeled outcome |
-| `customer_features.inactivity_churn_label` | **Derived** (180d since last order) |
-| `uplift_campaigns.*` | **Synthetic RCT** (reproducible, seed=42) |
-| `nba_offer_events.*` | **Simulated** CRM log |
-| CRM tier / points on Superstore | **Synthetic** (seed=42) |
+| | |
+|---|---|
+| **Data** | `audit/uci_orders.parquet` (order spend) |
+| **Time unit** | **Weeks** (`freq="W"`) |
+| **Split** | **45% fit / 20% validation / 35% test** |
+| **Acceptance gate** | Test aggregate \|pred − actual\| / actual **≤ 5%** |
+| **Scale** | `val_actual / val_pred` only — **test labels never used** |
+| **Leakage audit** | `clv_weekly.audit_no_leakage()` (cal span, known customers, scale identity) |
+| **Models** | Classic BG/NBD (Fader–Hardie–Lee) + Gamma-Gamma; MLP trained on **val**, scored on **test** |
+| **Purchase path** | Stationary weekly BG/NBD — **no** seasonality overlays (Hardie default). |
+| **Monetary** | Winsorized at p99 on **calibration** monetary only (separate from purchases) |
+| **CLV formula** | `E[purchases]_BG/NBD × E[avg spend]_GG × val_scale` |
+| **Module** | `scripts/clv_weekly.py` |
+| **Notebook** | `Notebooks/01-clv.ipynb` |
+| **Artifacts** | `models/01_clv_*` (saved only if gate passes) |
 
-Swap synthetic tables for production CRM exports when available.
+If the gate fails, treat the model as **not shippable** for £ totals (`assert_accepted`).
+
+**Not in scope:** Streamlit, margin/discounting, Dunnhumby, coupons, uplift/NBA.
 
 ---
 
-## Rebuild everything
+## 2 · Enterprise foil (optional)
+
+| | |
+|---|---|
+| **Keeps** | `00` + `01` unchanged (Hardie remains default equity) |
+| **Notebook** | `Notebooks/02-clv-enterprise.ipynb` |
+| **Module** | `scripts/clv_enterprise.py` |
+| **Idea** | Marketplace-style tabular CLV: rich order/line features + HistGradientBoosting + Empirical-Bayes country/cohort pooling |
+| **Protocol** | Same 45/20/35, val-only scale, ≤5% £ gate, no test leakage |
+| **Target** | Gross holdout £ (not contribution margin — UCI has no COGS/shipping) |
+| **Out of scope here** | PyMC Bayesian BG/NBD MCMC, Transformers/CASPR embeddings, ad bidding APIs |
+
+Compare head-to-head with `01` in the notebook. Ship `01` for consulting narratives unless `02` clearly wins ranking *and* clears the gate.
+
+---
+
+## Smoke test
 
 ```powershell
-pip install -r requirements.txt
-python scripts/build_datasets.py
+python scripts/generate_audit_notebook.py
+python scripts/generate_clv_notebook.py
+python scripts/generate_enterprise_clv_notebook.py
+python scripts/smoke_test_modeling.py
 ```
 
-Feature logic lives in `scripts/feature_store.py` — keep EDA and training in sync by always reading `customer_features.parquet`, not re-deriving in notebooks.
-
----
-
-## Modeling notebooks (`Notebooks/01`–`05`)
-
-Run after `build_datasets.py`. Each notebook loads Parquet, explores correlation / feature selection, splits train/val/test where applicable, compares models, and saves the best artifact to `models/` (gitignored).
-
-| Notebook | Data | Models | Saved artifact |
-|----------|------|--------|----------------|
-| `01-segmentation.ipynb` | `customer_features.parquet` | KMeans, GMM, Hierarchical | `01_segmentation_best.joblib` |
-| `02-churn-prediction.ipynb` | `telco_customers.parquet` | XGBoost, LightGBM, MLP | `02_churn_best.joblib` |
-| `03-clv.ipynb` | `online_retail_transactions.parquet` | BG/NBD + Gamma-Gamma, MLP | `03_clv_best.joblib` + `03_clv_bgf` / `03_clv_ggf` |
-| `04-uplift.ipynb` | `uplift_campaigns.parquet` | T-learner, X-learner, Uplift RF | `04_uplift_best.joblib` |
-| `05-next-best-action.ipynb` | `nba_offer_events` + `customer_features` | XGBoost / RF + tabular Q-learning | `05_nba_supervised_best.joblib`, `05_nba_rl_qtable.joblib` |
-
-Regenerate notebook templates: `python scripts/generate_modeling_notebooks.py`
-
-Quick smoke test (no plots): `python scripts/smoke_test_modeling.py`
+Runs audit export (incl. master) + weekly Hardie-faithful BG/NBD + GG fit/score/segments. Enterprise foil is optional (`02`).

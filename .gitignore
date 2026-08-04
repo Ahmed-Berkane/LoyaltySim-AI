@@ -12,38 +12,26 @@ scripts/__pycache__/
 .ipynb_checkpoints/
 Notebooks/.ipynb_checkpoints/
 
-# ── Data layout ──────────────────────────────────────────────────────────────
-# Raw downloads & caches:     data/raw/**              (never commit)
-# Modeling outputs:           data/modeling/*          (ignored except UCI spine)
-# Committed for EDA/models:   data/modeling/uci_*.parquet  (6 files — see uci_pipeline.py)
-# Legacy folder:              data/processed/**          (unused)
-
+# Raw downloads & caches (never commit)
 data/raw/**
 !data/raw/.gitkeep
 
+# Modeling: ignore all except committed UCI fact + dim
 data/modeling/*
 !data/modeling/.gitkeep
 !data/modeling/uci_fact_transactions.parquet
 !data/modeling/uci_dim_customers.parquet
-!data/modeling/uci_customer_features.parquet
-!data/modeling/uci_uplift_campaigns.parquet
-!data/modeling/uci_nba_offer_catalog.parquet
-!data/modeling/uci_nba_offer_events.parquet
 
 data/processed/
-
-# EDA train/val/test splits (written by Notebooks/eda/*.ipynb)
 data/splits/
 
-# Trained model artifacts (notebooks save here)
+# Trained artifacts (local)
 models/*
 !models/.gitkeep
 
-# Secrets & credentials
 .env
 .kaggle/
 
-# Archives, caches & temp office files
 *.zip
 *.tar.gz
 *.xlsx
